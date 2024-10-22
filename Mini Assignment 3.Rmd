@@ -1,0 +1,100 @@
+---
+title: "Mini Assignment 3"
+output: html_document
+date: "2024-10-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r, include=F}
+library(tidyverse)
+library(sf)
+library(here)
+library(tmap)
+library(tidycensus)
+Sys.getenv("CENSUS_API_KEY")
+```
+
+```{r}
+hospital_data <- st_read('https://raw.githubusercontent.com/ujhwang/urban-analytics-2024/main/Assignment/mini_3/yelp_hospital.geojson')
+```
+```{r}
+hospital_nodupe <- hospital_data %>% distinct()
+
+hospitals_cleaned <- hospital_nodupe %>% select(-id, -alias, -image_url, - is_closed, -url, -review_count, -categories, -rating, - transactions, -phone, - display_phone, -distance, -location.address2, -location.address3, -location.country)
+
+hospitalcoords <- st_coordinates(hospitals_cleaned)
+
+hospitaldf <- as.data.frame(hospitalcoords)
+colnames(hospitaldf) <- c("lon", "lat")
+hospitalsf <- st_as_sf(hospitaldf, coords = c("lon", "lat"), crs = 4326)
+```
+
+```{r}
+mini3_tractdata <- suppressMessages(
+  get_acs(geography = "tract",
+          state = "GA",
+          county = c("Dekalb", "Fulton"),
+          variables = c(hhincome = 'B19019_001', health_insurance = 'B27010_001E', transportation = 'B08006_001E'),
+          year = 2021,
+          survey = "acs5",
+          geometry = TRUE,
+          output = "wide")
+)
+```
+### Retrieving data for equity analysis. I decided to look at mean hosuehold income, health insurance status, and access to personal transportation. Income is a good base indicator of equity, because it can highlight how many individuals in a population can afford health-related procedures. Health insurance coverage will show the amount of the population that has access to insurance, which is often a barrier to healthcare. Lastly, access to personal transportation will show how many individuals have an efficient means of getting to a hospital to receive care.
+```{r}
+clean_tractdata <- mini3_tractdata %>% drop_na()
+```
+###Removed NA values from census data
+```{r}
+tm_shape(clean_tractdata %>% group_by(GEOID) %>% summarise(hhincomeE=mean(hhincomeE))) + tm_polygons(col = "hhincomeE", breaks = c(0, 20000, 40000, 60000, 80000, 100000)) + tm_shape(hospitalsf) + tm_dots(col = "red", size = 0.2, title = "Hospitals")
+```
+###Hospitals mapped over census tracts by mean household income
+```{r}
+tm_shape(clean_tractdata %>% group_by(GEOID) %>% summarise(health_insurance=mean(health_insurance))) + tm_polygons(col = "health_insurance", breaks = c(0, 1000, 2000, 3000, 4000, 5000), palette = "Greens") + tm_shape(hospitalsf) + tm_dots(col = "red", size = 0.2, title = "Hospitals")
+```
+###Hospitals mapped over census tracts by population covered by health insurance
+```{r}
+tm_shape(clean_tractdata %>% group_by(GEOID) %>% summarise(transportation=mean(transportation))) + tm_polygons(col = "transportation", breaks = c(0, 1000, 2000, 3000, 4000, 5000), palette = "reds") + tm_shape(hospitalsf) + tm_dots(col = "red", size = 0.2, title = "Hospitals")
+```
+###Hospitals mapped over census tracts by population with access to personal transportation
+```{r}
+clean_tractdata <- st_transform(clean_tractdata, st_crs(hospitalsf))
+
+tract_buffers <- st_buffer(clean_tractdata, dist = 402)
+
+intersections <- st_intersects(tract_buffers, hospitalsf)
+
+tracts_with_hospitals <- clean_tractdata %>% mutate(hospitals_within_025_mile = lengths(intersections))
+
+distances <- st_distance(clean_tractdata, hospitalsf)
+nearest_hospital_distance <- apply(distances, 1, min)
+tracts_with_hospital_distance <- clean_tractdata %>%
+  mutate(distance_to_nearest_hospital = nearest_hospital_distance)
+```
+###converting data frames to use same CRS, and creating buffers to calculate distance to hospital within each census tract
+```{r}
+tm_shape(tracts_with_hospital_distance) + tm_polygons(col = "distance_to_nearest_hospital", breaks = c(0, 500, 1000, 1500, 2000, 3000, 4000, 5000), palette = "Blues", title = "Distance to Nearest Hospital") + tm_shape(clean_tractdata %>% group_by(GEOID) %>% summarise(transportation=mean(transportation))) + tm_polygons(col = "transportation", breaks = c(0, 1000, 2000, 3000, 4000, 5000), palette = "reds") + tm_shape(hospitalsf) + tm_dots(col = "red", size = 0.2, title = "Hospitals") + tm_layout(legend.outside = TRUE)
+```
+###Map of hospital distance compared to access to personal transport
+```{r}
+tm_shape(tracts_with_hospital_distance) + tm_polygons(col = "distance_to_nearest_hospital", breaks = c(0, 500, 1000, 1500, 2000, 3000, 4000, 5000), palette = "Blues", title = "Distance to Nearest Hospital") +  tm_shape(clean_tractdata %>% group_by(GEOID) %>% summarise(health_insurance=mean(health_insurance))) + tm_polygons(col = "health_insurance", breaks = c(0, 1000, 2000, 3000, 4000, 5000), palette = "Greens") + tm_shape(clean_tractdata %>% group_by(GEOID) %>% summarise(hhincomeE=mean(hhincomeE))) + tm_polygons(col = "hhincomeE", breaks = c(0, 20000, 40000, 60000, 80000, 100000)) + tm_shape(hospitalsf) + tm_dots(col = "red", size = 0.2, title = "Hospitals") + tm_layout(legend.outside = TRUE)
+```
+###Map of hospital distance compared to income level and health insurance coverage
+```{r}
+data_for_scatter1 <- tracts_with_hospital_distance %>% select(GEOID, distance_to_nearest_hospital, health_insurance)
+
+ggplot(data_for_scatter1, aes(x = distance_to_nearest_hospital, y = health_insurance)) + geom_point(color = "blue", alpha = 0.6) + labs(title = "Distance to Hospital vs. Insurance Coverage", x = "Distance to Hospital in Meters", y = "Individuals with Insurance") + theme_minimal() + geom_smooth(method = "lm", color = "red", se = FALSE)
+```
+###Scatterplot comparing distance to hospital and health insurance coverage
+```{r}
+data_for_scatter2 <- tracts_with_hospital_distance %>% select(GEOID, distance_to_nearest_hospital, hhincomeE)
+
+ggplot(data_for_scatter2, aes(x = distance_to_nearest_hospital, y = hhincomeE)) + geom_point(color = "blue", alpha = 0.6) + labs(title = "Distance to Hospital vs. Mean Household Income", x = "Distance to Hospital in Meters", y = "Mean Household Income") + theme_minimal() + geom_smooth(method = "lm", color = "red", se = FALSE)
+```
+### Overall Analysis: It appears that Atlanta's hospitals are centrally located. The majority of them are clustered in the center of the two counties. When comparing insurance coverage to hospital location, it appears that hospitals are located in census tracts with lower levels of insurance, compared to higher ones. Additionally, hospitals seemed to be located in census tracts with fewer car ownership. While this may seem counterintuitive, I would argue that hospitals are located relatively equitably in Atlanta. While insurance and transportation are barriers to accessing healthcare, the location of hospitals tend to be closer to those with higher barriers. This may be because those without insurance tend to visit hospitals more, rather than visiting private practices that require specific insurance or have higher out of pocket costs. Secondly, those that have access to personal transportation are able to drive themselves to the care that they need, rather than relying on public transportation. Because of this, it seems that hospitals are located in opportune locations for those that need those services. 

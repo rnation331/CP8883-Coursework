@@ -1,0 +1,54 @@
+---
+title: "Mini 2"
+output: html_document
+date: "2024-09-24"
+---
+```{r}
+library(tidycensus)
+library(sf)
+library(tmap)
+library(jsonlite)
+library(tidyverse)
+library(httr)
+library(reshape2)
+library(here)
+library(yelpr)
+library(knitr)
+```
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+my_list <- readRDS("active.rds")
+active_living_df <- as.data.frame(my_list)
+```
+#Original Data Frame
+```{r}
+active_living_nodupes <- active_living_df %>% distinct()
+print(active_living_nodupes)
+```
+#Deleted duplicated rows
+```{r}
+flattened_categories <- active_living_nodupes %>%
+  separate_rows(businesses.categories, sep = ", ") %>%
+  mutate(businesses.categories = trimws(businesses.categories))
+
+category_count <- flattened_categories %>%
+  group_by(businesses.categories) %>%
+  summarise(count = n(), .groups = "drop")
+print(category_count)
+```
+#Flattened business categories
+#No rows had missing coordinates
+```{r}
+active_living_cleaned <- active_living_nodupes %>%
+  select(-businesses.id, -businesses.alias, -businesses.image_url, -businesses.is_closed, -businesses.url, -businesses.transactions, -businesses.display_phone, -businesses.distance, -businesses.business_hours, -region.center.longitude, -region.center.latitude, -total, -businesses.attributes)
+print(active_living_cleaned)
+```
+#Removed unneccessary columns
+```{r}
+final_table <- active_living_cleaned[-c(9, 19, 16, 22, 14, 17, 18), ]
+print(final_table)
+```
+#After tidying the data, the first thing I noticed was how much easier it was to read. I removed unnecessary columns, which tended to be long and take up space. Additionally, despite strict search criteria, the original data still had irrelevant data from cities, including one in Georgia. By removing these, I was able to reduce the “statistical noise” and focus solely on businesses in my hometown. After flattening the categories, it shocked me to see how many boat related businesses there were. I knew that a large part of our local economy surrounds the lakes, but I still did not expect there to be that many businesses related to water sports. I was disappointed to see that very few businesses returned ratings, as I would have loved to investigate any trends regarding ratings and type of business. My data also did not return any price information, however I would expect that as businesses move closer towards the lake, they would increase in price level. This helped me identify an avenue for future investigation.

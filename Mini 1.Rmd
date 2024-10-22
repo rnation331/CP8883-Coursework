@@ -1,0 +1,119 @@
+---
+title: "Mini Assignment 1"
+output: html_document
+date: "2024-09"
+---
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(error = TRUE)
+```
+
+```{r}
+library(tidycensus)
+library(sf)
+library(tmap)
+library(jsonlite)
+library(tidyverse)
+library(httr)
+library(jsonlite)
+library(reshape2)
+library(here)
+library(yelpr)
+library(knitr)
+Sys.getenv("CENSUS_API_KEY")
+Sys.getenv("YELP_API_KEY")
+```
+
+```{r}
+tract <- suppressMessages(
+  get_acs(geography = "tract",
+          state = "SC",
+          county = c("Oconee"),
+          variables = c(hhincome = 'B19019_001'),
+          year = 2020,
+          survey = "acs5",
+          geometry = TRUE,
+          output = "wide")
+)
+
+seneca<- tigris::places('SC') %>%
+  filter(NAME == 'Seneca')
+
+tract_seneca <- tract[seneca,]
+
+message(sprintf("nrow: %s, ncol: %s", nrow(tract_seneca),ncol(tract_seneca)))
+
+tract_seneca %>% head() %>% knitr::kable()
+```
+
+#Census Tract information for Seneca, SC
+
+```{r}
+tm_shape(tract_seneca) + tm_borders(lwd = 2) +
+  tm_shape(seneca) + tm_polygons(col = 'blue', alpha = 0.4)
+
+```
+
+![seneca, sc with census tracts](/Users/ryannation/Downloads/tract_seneca.png)
+
+#See image above
+
+```{r}
+hotels <- business_search(api_key = Sys.getenv("YELP_API_KEY"),
+                          categories = "hotels",
+                          latitude = 34.684145,
+                          longitude = -82.955778,
+                          offset = 0,
+                          radius = 2000,
+                          limit = 50)
+lapply(hotels, head)
+```
+#Code chunk sets up Yelp request, and searches for Hotels in Seneca, SC based on long/lat. There are less than 50 hotels in the town, hence no need for multiple searches.
+
+```{r}
+df <- data.frame(
+  id = 1:2,
+  longitude = c(-82.94044, -82.95481, -82.95338, -82.96548, -82.4113, -82.94573, -82.94096, -82.94233),
+  latitude = c(34.69846, 34.68153, 34.69659, 34.69757, 34.69962, 34.69811, 34.69780, 34.69842))
+
+hotels_sf <- st_as_sf(df, coords = c("longitude", "latitude"), crs = 4326)
+```
+#Code Chunk to convert data from data frame to simple coordinates.
+
+```{r}
+tm_shape(hotels_sf) + tm_dots()
+```
+#Create plot of hotels in Seneca
+
+![seneca hotels](/Users/ryannation/Downloads/Seneca Hotels.png)
+
+```{r}
+active_living <- business_search(api_key = Sys.getenv("YELP_API_KEY"),
+                                 categories = "active",
+                                 latitude = 34.684145,
+                                 longitude = -82.955778,
+                                 offset = 0,
+                                 radius = 2500,
+                                 limit = 50)
+lapply(active_living, head)
+```
+#Second Yelp search for recreational businesses
+```{r}
+active_coordinates <- data.frame(
+  Latitude = c(34.68623, 34.68566, 34.69666, 34.68220, 34.68514, 34.68573, 34.68539, 34.68580, 34.87822, 34.63303, 34.71162, 34.69783, 34.69967, 34.94891, 34.69117, 34.88444, 34.79039, 34.69967, 34.69909, 34.68644, 34.68644, 34.38024, 34.69230, 34.65637, 34.67452, 34.70035, 34.69144, 34.69047),
+  Longitude = c(-82.94979, -82.95320, -82.95072, -82.95125, -82.95295, -82.95457, -82.95409, -82.95387, -83.40234, -82.94111, -82.94655, -82.95119, -82.93094, -83.75480, -82.98296, -82.55630, -82.69617, -82.93094, -82.82543, -82.94939, -82.94939, -82.91890, -82.93267, -83.08280, -82.95490, -82.93938, -82.96021, -82.99287))
+active_sf <- st_as_sf(active_coordinates, coords = c("Longtitude", "Latitude"), crs = 4326)
+```
+#Convert data into simple coordinates
+
+```{r}
+tm_shape(active_sf) + tm_dots()
+```
+#Plot recreational activities in Seneca, SC
+
+![rec activities in seneca](/Users/ryannation/Downloads/Rec Activities in Seneca.png)
+#Plot
+
+#1. I chose Seneca, SC for this assignment because it is my hometown, and I am very familiar with the area. Seneca is surrounded by two lakes, as well as Clemson University, so it lends itself to lots of tourism. I searched for hotels, and recreational activity businesses.
+#2. There are 36 businesses in total for these 2 categories.
+#3. There are 8 hotels, and 28 recreational activity businesses.
+#4. Many of the recreational businesses are located near the lake. Oftentimes, people visit to rent boats, and enjoy a weekend on Lake Keowee. Additionally, many recreational businesses are located in the heart of Downtown Seneca, near the historic "Ram Cat Alley." This alley is home to a number of businesses, and is a growing hub of activity for Seneca. Additionally, the majority of hotels are located along Highway 123. This highway provides easy access to Clemson University, as well as Interstate I-85.

@@ -1,0 +1,64 @@
+---
+title: "Mini 5"
+output: html_document
+date: "2024-10-17"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+```{r}
+library(ggplot2)
+library(sf)
+library(tmap)
+library(leaflet)
+library(tidycensus)
+library(dplyr)
+library(maps)
+```
+```{r}
+mini5data <- read.csv("/Users/ryannation/Downloads/mini 5 data.csv")
+```
+```{r}
+death.by.state <- ggplot(data = mini5data, aes(x = State)) + geom_bar() + facet_wrap(~ State, scales = "free_x")
+death.by.state
+```
+```{r}
+state_lookup <- data.frame(abbreviation = state.abb, state_name = tolower(state.name))
+
+state_count <- mini5data %>%
+  group_by(State) %>%
+  summarise(count = n(), .groups = 'drop')
+
+state_count <- state_count %>%
+  left_join(state_lookup, by = c("State" = "abbreviation"))
+
+states_map <- map_data("state") %>%
+  left_join(state_count, by = c("region" = "state_name"))
+
+ggplot(data = states_map, aes(x = long, y = lat, group = group, fill = count)) +
+  geom_polygon(color = "white") +
+  scale_fill_gradient(low = "lightblue", high = "darkred", na.value = "grey") +
+  labs(title = "Deaths per U.S. State") +
+  coord_fixed(1.3)
+```
+```{r}
+violence_graph <- ggplot(data = mini5data, aes(x = Highest.level.of.force)) + geom_bar() + theme(axis.text.x = element_text(angle = 45, hjust = 1)) + labs(title = "Highest Level of Violence Used")
+
+violence_graph
+```
+```{r}
+filtered_data <- mini5data %>%
+  filter(!Race %in% c("", "African-American/Black African-American/Black Not imputed", "Christopher Anthony Alexander", "European-American/European-American/White", "european-American/White"))
+
+race_graph <- ggplot(data = filtered_data, aes(x = Race)) + geom_bar() + theme(axis.text.x = element_text(angle = 45, hjust = 1)) + labs(title = "Individuals Killed by Race")
+
+race_graph
+```
+###When I first began plotting this data, I was surprised by what I found. The first surprising thing was the states that had the most police killings were California and Texas. Oftentimes, the media tends to anecdotally portray cities such as Chicago or Detroit as dangerous and fraught with violence. However, this database shows us that these states have much lower rates of police violence than California and Texas. This may seem shocking at first, but once you acknowledge the populations of these states, the map makes more sense. California is the most populous state with almost 40 million residents, and Texas is a close second with 30 million residents. Perhaps there are more instances of violence in these states due to the simple fact that there are more people in these states.
+
+###The second surprising thing was the types of violence documented, overwhelmingly police are killing people with guns. 
+
+###Lastly, the race graph seems surprising at first, but when given more context, it seems to follow trends. It is common knowledge that people of color are subject to unjust policing, but this data seems to tell a different story. As you can see in the race graph, White individuals are killed the most by police. However, there are two issues with this. One, the race unspecified bar is the second highest, meaning there is a lot of data missing in regards to race. Two, White individuals make up 75% of the total U.S. population, where Black individuals only make up 13%. There are almost six White people for every one Black person. By acknowledging this, we can clearly see that Black people are killed by police at a much higher rate, and this issue needs to be addressed.

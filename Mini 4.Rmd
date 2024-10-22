@@ -1,0 +1,51 @@
+---
+title: "Mini 4"
+output: html_document
+date: "2024-10-11"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+```{r}
+library(tidyverse)
+library(sf)
+library(tmap)
+library(leaflet)
+library(ggplot2)
+library(ggpubr)
+```
+```{r}
+mini4data <- read.csv("/Users/ryannation/Downloads/coffee.csv")
+head(mini4data)
+```
+```{r}
+plot1 <- ggplot(data = mini4data) +geom_boxplot(aes(x=avg_rating, y=hhincome, group = cut(avg_rating, breaks = 5)), color="black", fill="white")
+plotly::ggplotly(plot1)
+```
+###This data appears to follow a normal curve. Coffee shop POIs with an average rating of 3 have the highest median income, whereas POIs with 1 or 5 star ratings are lower. Additionally, stores with a rating of 4 had higher outliers, which might reveal further findings with more analysis.
+```{r}
+plot2 <- ggplot(data = mini4data) + geom_boxplot(aes(x=avg_rating, y=hhincome, group = cut(avg_rating, breaks = 5)), color = "black", fill = "white") + facet_wrap(~county) + labs(x = "Average Yelp Rating", y = "Median Annual Household Income ($)")
+plotly::ggplotly(plot2)
+```
+###Clayton County appears to have much lower median incomes than the other 4 counties. Additionally, it has no POIs with a 5 star average rating. This may indicate a relationship between income and attractiveness of POIs.
+```{r}
+plot3 <- ggplot(data = mini4data) + geom_point(mapping = aes(x=review_count_log, y=hhincome, color = pct_white)) + facet_wrap(~county) + labs(x = "Review Count (log)", y = "Median Annual Household Income", color = "Percentage of residents\nwho self-identified as white", title = "Scatterplot: Review Count vs. Household Income") + scale_color_gradient(low="darkblue", high = "red") + theme(guides(color = guide_legend(override.aes = list(size = 1))))
+plot3
+```
+###Fulton and DeKalb counties have a much higher count of reviews, with a larger spread than the others. Clayton county has the fewest reviews as well as lowest median income and highest proportion of residents that do not identify as white. This indicates that there might be a relationship between race and income, compared to the amount of POIs in a given neighborhood.
+```{r}
+mini4data_long <- mini4data %>% pivot_longer(cols = c("hhincome", "pct_pov_log", "pct_white", "pop"), names_to = "category", values_to = "value") %>% mutate(value = case_when(
+  category %in% c("hhincome", "pop") ~ as.integer(value),
+  category %in% c("pct_pov_log", "pct_white") ~as.numeric(value),
+  TRUE ~ value
+))
+```
+###Pivoting data frame for easier plotting
+```{r}
+plot4 <- ggplot(data = mini4data_long) + geom_point(mapping = aes(x = review_count_log, y = value, color = county)) + facet_wrap(~category, scales = "free_y") + labs(x = "Review Count Logged", y = "Values", color = "County", title = "Scatterplot between logged review count & neighborhood characteristics\nUsing Yelp data in Five Counties Around Atlanta, GA") + geom_smooth(mapping = aes(x = review_count_log, y = value, color = county), method = lm, se = FALSE) + ggpubr::stat_cor(aes(x = review_count_log, y = value), method = "pearson")
+plot4
+```
+###Clearly, the relationship between reviews logged and income, poverty, and race are significant. This supports the claim that there is a relationship between neighborhood characteristics and POIs. Depending on how you would classify "advantaged" could determine how you intepret this data. I would argue that the relationship between income and POIs indicates that more "advantaged" neighborhoods tend to have a larger number of, and higher quality of POIs than less advantaged neighborhoods. Additionally, race seems to be a good indicator of POI count. 
